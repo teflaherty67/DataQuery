@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RevitAddIns>
+  <AddIn Type="Command">
+    <Text>DataQuery - Command 1</Text>
+    <Description>Some description</Description>
+    <Assembly>DataQuery\DataQuery.dll</Assembly>
+    <FullClassName>DataQuery.Command1</FullClassName>
+    <ClientId>4b4ebada-3255-46a2-b53c-96606f01f5e6</ClientId>
+    <VendorId>com.YOUR COMPANY NAME</VendorId>
+    <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
+  </AddIn>
+  <AddIn Type="Command">
+    <Text>DataQuery - Command 2</Text>
+    <Description>Some description</Description>
+    <Assembly>DataQuery\DataQuery.dll</Assembly>
+    <FullClassName>DataQuery.Command2</FullClassName>
+    <ClientId>4dbc6659-d9ab-48cf-8ffa-59d81d0deb50</ClientId>
+    <VendorId>com.YOUR COMPANY NAME</VendorId>
+    <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
+  </AddIn>
+  <AddIn Type="Application">
+    <Name>DataQuery</Name>
+    <Assembly>DataQuery\DataQuery.dll</Assembly>
+    <FullClassName>DataQuery.App</FullClassName>
+    <ClientId>2e9c042f-c3eb-4847-944a-39715a2b8aec</ClientId>
+    <VendorId>com.YOUR COMPANY NAME</VendorId>
+    <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>
+  </AddIn>
+</RevitAddIns>
