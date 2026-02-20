@@ -73,7 +73,7 @@ if not exist "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery" mkdir 
 copy "$(MSBuildProjectDirectory)\*.addin" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)"
 copy "$(TargetDir)*.dll" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery"
 copy "$(TargetDir)*.json" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery"
-xcopy "$(TargetDir)runtimes" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery\runtimes" /E /I /Y
+if exist "$(TargetDir)runtimes" xcopy "$(TargetDir)runtimes" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery\runtimes" /E /I /Y
 </PostBuildEvent>
 	<RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
 	<RunAnalyzersDuringLiveAnalysis>False</RunAnalyzersDuringLiveAnalysis>
