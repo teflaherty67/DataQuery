@@ -7,44 +7,14 @@
 	<PlatformTarget>x64</PlatformTarget>
 	<ImplicitUsings>true</ImplicitUsings>
 	<PublishAddinFiles>true</PublishAddinFiles>
-	<Configurations>Debug R20;Debug R21;Debug R22;Debug R23;Debug R24;Debug R25;Debug R26</Configurations>
-	<Configurations>$(Configurations);Release R20;Release R21;Release R22;Release R23;Release R24;Release R25;Release R26</Configurations>
+	<Configurations>Debug R25;Debug R26</Configurations>
+	<Configurations>$(Configurations);Release R25;Release R26</Configurations>
 	<Nullable>disable</Nullable>
 	<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	<ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
 	<AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 </PropertyGroup>
 
-<PropertyGroup Condition="$(Configuration.Contains('R20'))">
-	<RevitVersion>2020</RevitVersion>
-	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2020</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R21'))">
-    	<RevitVersion>2021</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-    	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2021</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R22'))">
-    	<RevitVersion>2022</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2022</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R23'))">
-	<RevitVersion>2023</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2023</DefineConstants>
-</PropertyGroup>
-<PropertyGroup Condition="$(Configuration.Contains('R24'))">
-	<RevitVersion>2024</RevitVersion>
-    	<TargetFramework>net48</TargetFramework>
-	<EnableNETAnalyzers>false</EnableNETAnalyzers>
-	<DefineConstants>$(DefineConstants);REVIT2024</DefineConstants>
-</PropertyGroup>
 <PropertyGroup Condition="$(Configuration.Contains('R25'))">
 	<RevitVersion>2025</RevitVersion>
 	<TargetFramework>net8.0-windows</TargetFramework>
@@ -102,7 +72,9 @@ echo *** $(MSBuildProjectDirectory)
 if not exist "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery" mkdir "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery"
 copy "$(MSBuildProjectDirectory)\*.addin" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)"
 copy "$(TargetDir)*.dll" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery"
-	</PostBuildEvent>
+copy "$(TargetDir)*.json" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery"
+xcopy "$(TargetDir)runtimes" "$(AppData)\Autodesk\REVIT\Addins\$(RevitVersion)\DataQuery\runtimes" /E /I /Y
+</PostBuildEvent>
 	<RunAnalyzersDuringBuild>False</RunAnalyzersDuringBuild>
 	<RunAnalyzersDuringLiveAnalysis>False</RunAnalyzersDuringLiveAnalysis>
 	<Copyright>2025</Copyright>
