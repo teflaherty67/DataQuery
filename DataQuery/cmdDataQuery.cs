@@ -453,7 +453,12 @@ namespace DataQuery
 
             HttpRequestMessage request = BuildRequest(HttpMethod.Post, url, body);
             HttpResponseMessage response = _http.Send(request);
-            response.EnsureSuccessStatusCode();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                throw new Exception($"HTTP {(int)response.StatusCode}: {errorBody}");
+            }
         }
 
         private void UpdateRecord(string recordId, clsPlanData plan)
