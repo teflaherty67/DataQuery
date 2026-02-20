@@ -8,6 +8,6 @@ namespace DataQuery
 {
     internal static class apiSecrets
     {
-        public const string AirtableApiKey = "your-token-here";
+        public const string AirtableApiKey = "test-code";
     }
 }
