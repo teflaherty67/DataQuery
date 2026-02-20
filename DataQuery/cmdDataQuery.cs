@@ -62,44 +62,46 @@ namespace DataQuery
                 if (dialogResult != true)
                     return Result.Cancelled;
 
-                // 3. write form values to Project Information (committed before anything else)
+                // 3. Write form values to Project Information
                 WriteValuesToProjectInfo(curDoc, curForm);
 
-                // 4. extract plan data from the active model
+                // 4. Extract plan data
                 clsPlanData planData = ExtractPlanData(curDoc);
 
-                // null check Plan Data before proceeding to Airtable write
                 if (planData == null)
                 {
                     Utils.TaskDialogError("Data Query", "Error", "Unable to extract plan data from the model.");
-                    return Result.Failed;
+                    return Result.Succeeded; // ← not Failed
                 }
 
-                // 5. show confirmation dialog with extracted data before writing to Airtable
+                // 5. Show confirmation
                 if (!ShowConfirmationDialog(planData))
-                    return Result.Cancelled;
+                    return Result.Succeeded; // ← not Cancelled
 
-                // 6. write the data to Airtable
-                string existingRecordId = FindExistingRecord(planData.PlanName, planData.SpecLevel, planData.Subdivision);
-
-                if (existingRecordId != null)
+                // 6. Write to Airtable - isolated try-catch so Revit doesn't roll back on failure
+                try
                 {
-                    string existsMessage =
-                        $"Plan '{planData.PlanName}' with spec '{planData.SpecLevel}' already exists " +
-                        $"in subdivision '{planData.Subdivision}'.\n\nDo you want to update it?";
+                    string existingRecordId = FindExistingRecord(planData.PlanName, planData.SpecLevel, planData.Subdivision);
 
-                    if (!Utils.TaskDialogAccept("Data Query", "Plan Exists", existsMessage))
-                        return Result.Cancelled;
+                    if (existingRecordId != null)
+                    {
+                        if (!Utils.TaskDialogAccept("Data Query", "Plan Exists",
+                            $"Plan '{planData.PlanName}' already exists. Update it?"))
+                            return Result.Succeeded;
 
-                    UpdateRecord(existingRecordId, planData);
-                    Utils.TaskDialogInformation("Data Query", "Success",
-                        $"Updated plan '{planData.PlanName}' in Airtable.");
+                        UpdateRecord(existingRecordId, planData);
+                        Utils.TaskDialogInformation("Data Query", "Success", $"Updated plan '{planData.PlanName}' in Airtable.");
+                    }
+                    else
+                    {
+                        InsertRecord(planData);
+                        Utils.TaskDialogInformation("Data Query", "Success", $"Added plan '{planData.PlanName}' to Airtable.");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    InsertRecord(planData);
-                    Utils.TaskDialogInformation("Data Query", "Success",
-                        $"Added plan '{planData.PlanName}' to Airtable.");
+                    Utils.TaskDialogError("Data Query", "Airtable Error",
+                        $"Project Information was saved, but Airtable write failed:\n{ex.Message}");
                 }
 
                 return Result.Succeeded;
@@ -110,9 +112,7 @@ namespace DataQuery
                 Utils.TaskDialogError("Data Query", "Error", $"An error occurred:\n{ex.Message}");
                 return Result.Failed;
             }
-        }
-
-        
+        }        
 
         #region Add Missing Parameters
 
