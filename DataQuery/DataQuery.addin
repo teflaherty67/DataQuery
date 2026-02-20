@@ -4,7 +4,7 @@
     <Text>DataQuery - Command 1</Text>
     <Description>Some description</Description>
     <Assembly>DataQuery\DataQuery.dll</Assembly>
-    <FullClassName>DataQuery.Command1</FullClassName>
+    <FullClassName>DataQuery.cmdDataQuery</FullClassName>
     <ClientId>4b4ebada-3255-46a2-b53c-96606f01f5e6</ClientId>
     <VendorId>com.YOUR COMPANY NAME</VendorId>
     <VendorDescription>YOUR COMPANY NAME, YOUR COMPANY URL</VendorDescription>

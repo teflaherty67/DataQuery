@@ -11,11 +11,12 @@ namespace DataQuery
     /// Revit command to:
     ///   1. Add any missing shared parameters to the project
     ///   2. Launch frmProjInfo for user input
+    ///   3. Write the values to Project Information parameters
     ///   3. Extract plan data from the active model
     ///   4. Write the data to Airtable
     /// Requires: clsPlanData.cs, frmProjInfo.xaml
     /// </summary>
-    
+
     [Transaction(TransactionMode.Manual)]
     public class cmdDataQuery : IExternalCommand
     {
@@ -56,12 +57,15 @@ namespace DataQuery
                     return paramResult;
 
                 // 2. Launch frmProjInfo for user input
-                frmProjInfo form = new frmProjInfo(curDoc);
-                bool? dialogResult = form.ShowDialog();
+                frmProjInfo curForm = new frmProjInfo(curDoc);
+                bool? dialogResult = curForm.ShowDialog();
                 if (dialogResult != true)
                     return Result.Cancelled;
 
-                // 3. extract plan data from the active model
+                // 3. write form values to Project Information (committed before anything else)
+                WriteValuesToProjectInfo(curDoc, curForm);
+
+                // 4. extract plan data from the active model
                 clsPlanData planData = ExtractPlanData(curDoc);
 
                 // null check Plan Data before proceeding to Airtable write
@@ -71,11 +75,11 @@ namespace DataQuery
                     return Result.Failed;
                 }
 
-                // 4. show confirmation dialog with extracted data before writing to Airtable
+                // 5. show confirmation dialog with extracted data before writing to Airtable
                 if (!ShowConfirmationDialog(planData))
                     return Result.Cancelled;
 
-                // 5. write the data to Airtable
+                // 6. write the data to Airtable
                 string existingRecordId = FindExistingRecord(planData.PlanName, planData.SpecLevel, planData.Subdivision);
 
                 if (existingRecordId != null)
@@ -106,7 +110,9 @@ namespace DataQuery
                 Utils.TaskDialogError("Data Query", "Error", $"An error occurred:\n{ex.Message}");
                 return Result.Failed;
             }
-        }        
+        }
+
+        
 
         #region Add Missing Parameters
 
@@ -188,6 +194,25 @@ namespace DataQuery
             Utils.TaskDialogInformation("Data Query", "Parameters Added", resultMessage);
 
             return Result.Succeeded;
+        }
+
+        private void WriteValuesToProjectInfo(Document curDoc, frmProjInfo curForm)
+        {
+            using (Transaction t = new Transaction(curDoc, "Save Project Information"))
+            {
+                t.Start();
+
+                ProjectInfo projInfo = curDoc.ProjectInformation;
+
+                Common.Utils.SetParameterByName(projInfo, "Project Name", curForm.PlanName);
+                Common.Utils.SetParameterByName(projInfo, "Spec Level", curForm.SpecLevel);
+                Common.Utils.SetParameterByName(projInfo, "Client Name", curForm.ClientName);
+                Common.Utils.SetParameterByName(projInfo, "Client Division", curForm.ClientDivision);
+                Common.Utils.SetParameterByName(projInfo, "Client Subdivision", curForm.ClientSubdivision);
+                Common.Utils.SetParameterByName(projInfo, "Garage Loading", curForm.GarageLoading);
+
+                t.Commit();
+            }
         }
 
         #endregion
