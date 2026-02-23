@@ -308,13 +308,12 @@ namespace DataQuery
 
         private int CountStories(Document curDoc)
         {
+            string[] storyLevels = { "first floor", "second floor", "main level", "upper level" };
+
             return new FilteredElementCollector(curDoc)
                 .OfClass(typeof(Level))
                 .Cast<Level>()
-                .Where(l => !l.Name.ToLower().Contains("roof") &&
-                            !l.Name.ToLower().Contains("foundation") &&
-                            !l.Name.ToLower().Contains("base") &&
-                            !l.Name.ToLower().Contains("plate"))
+                .Where(l => storyLevels.Contains(l.Name.ToLower()))
                 .Count();
         }
 
