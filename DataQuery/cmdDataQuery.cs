@@ -241,6 +241,7 @@ namespace DataQuery
             planData.Bedrooms = bedrooms;
             planData.Bathrooms = bathrooms;
 
+            planData.MasterBedLoc = GetMasterBedLoc(curDoc);
             planData.GarageBays = CountGarageBays(curDoc);
             planData.LivingArea = GetLivingArea(curDoc);
             planData.TotalArea = GetTotalArea(curDoc);
@@ -269,9 +270,9 @@ namespace DataQuery
                 return;
             }
 
-            // check if the view has been rotated by examining UpDirection
-            XYZ up = foundationView.UpDirection;
-            bool isRotated = Math.Abs(up.Y) < 0.99;
+            // get the view's value of RightDirection and UpDirections to determine width and depth orientation
+            XYZ up = foundationView.UpDirection.Normalize();
+            XYZ right = foundationView.RightDirection.Normalize();
 
             // if the view is a dependent view, get the parent view instead
             ElementId parentId = foundationView.GetPrimaryViewId();
@@ -298,9 +299,9 @@ namespace DataQuery
             Dimension widthDim = null;
             Dimension depthDim = null;
 
-            // define variables to track the max dimension offset for width and depth
-             double maxWidthOffset = double.MinValue;
-             double maxDepthOffset = double.MinValue;
+            // define variables to track the largest dimension value for width and depth
+            double maxWidthValue = double.MinValue;
+            double maxDepthValue = double.MinValue;
 
             // loop through dimensions to find the ones that are likely overall width and depth based on their orientation and offset
             foreach (Dimension curDim in listDims)
@@ -310,52 +311,29 @@ namespace DataQuery
                 if (dimLine == null) continue;
 
                 // get the normalized direction of the dimension line
-                XYZ dir = (dimLine.Direction).Normalize();
+                XYZ dimDir = (dimLine.Direction).Normalize();
 
-                // determine if horizontal or vertical based on view rotation
-                bool isHorizontal = isRotated
-                    ? Math.Abs(dir.Y) > 0.99
-                    : Math.Abs(dir.X) > 0.99;
+                // check if dimension runs parallel to view's right direction = width
+                bool isWidth = Math.Abs(dimDir.DotProduct(right)) > 0.99;
 
-                bool isVertical = isRotated
-                    ? Math.Abs(dir.X) > 0.99
-                    : Math.Abs(dir.Y) > 0.99;
+                // check if dimension runs parallel to view's up direction = depth
+                bool isDepth = Math.Abs(dimDir.DotProduct(up)) > 0.99;
 
-                // get the dimension origin to determine it's distance from the structure
-                XYZ dimOrigin = dimLine.Origin;
+                double value = curDim.Value.Value;
 
-                if (isHorizontal)
+                if (isWidth && value > maxWidthValue)
                 {
-                    // horzontal dimension - candidate for width
-                    // farthest from the structure has the most extreme Y value
-                    double offset = Math.Abs(dimOrigin.Y);
-
-                    // check if this dimension is farther than the current max width offset
-                    if (offset > maxWidthOffset)
-                    {
-                        // if yes, update the max width offset and assign this dimension as the width dimension
-                        maxWidthOffset = offset;
-                        widthDim = curDim;
-                    }
+                    maxWidthValue = value;
+                    widthDim = curDim;
                 }
-
-                else if (isVertical)
+                else if (isDepth && value > maxDepthValue)
                 {
-                    // vertical dimension - candidate for depth
-                    // farthest from the structure has the most extreme X value
-                    double offset = Math.Abs(dimOrigin.X);
-
-                    // check if this dimension is farther than the current max depth offset
-                    if (offset > maxDepthOffset)
-                    {
-                        // if yes, update the max depth offset and assign this dimension as the depth dimension
-                        maxDepthOffset = offset;
-                        depthDim = curDim;
-                    }
+                    maxDepthValue = value;
+                    depthDim = curDim;
                 }
             }
 
-            // if valid dimensions are foudn, extract their values as strings
+            // if valid dimensions are found, extract their values as strings
             if (widthDim != null)
                 width = widthDim.ValueString;
             
@@ -393,15 +371,34 @@ namespace DataQuery
                     bedrooms++;
 
                 if (name.Contains("bath"))
-                {
-                    if (name.Contains("powder") || name.Contains("half"))
-                        halfBaths++;
-                    else
-                        fullBaths++;
-                }
+                    fullBaths++;
+
+                if (name.Contains("powder") || name.Contains("pwdr"))
+                    halfBaths++;
             }
 
             bathrooms = fullBaths + (halfBaths * 0.5m);
+        }
+
+        private string GetMasterBedLoc(Document curDoc)
+        {
+            foreach (Room room in new FilteredElementCollector(curDoc)
+                .OfClass(typeof(SpatialElement))
+                .OfType<Room>())
+            {
+                if (room.Area <= 0) continue;
+
+                if (!room.Name.ToLower().Contains("master")) continue;
+
+                string levelName = room.Level?.Name ?? string.Empty;
+
+                if (levelName.ToLower().Contains("first") || levelName.ToLower().Contains("main"))
+                    return "Down";
+                else
+                    return "Up";
+            }
+
+            return null;
         }
 
         private int CountGarageBays(Document curDoc)
@@ -491,7 +488,7 @@ namespace DataQuery
                              $"?filterByFormula={Uri.EscapeDataString(formula)}&maxRecords=1";
 
             HttpRequestMessage request = BuildRequest(HttpMethod.Get, url);
-            HttpResponseMessage response = _http.Send(request);
+            HttpResponseMessage response = _http.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
 
             string json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -509,7 +506,7 @@ namespace DataQuery
             string body = BuildRecordJson(plan);
 
             HttpRequestMessage request = BuildRequest(HttpMethod.Post, url, body);
-            HttpResponseMessage response = _http.Send(request);
+            HttpResponseMessage response = _http.SendAsync(request).GetAwaiter().GetResult();
 
             if (!response.IsSuccessStatusCode)
             {
@@ -524,7 +521,7 @@ namespace DataQuery
             string body = BuildRecordJson(plan);
 
             HttpRequestMessage request = BuildRequest(HttpMethod.Patch, url, body);
-            HttpResponseMessage response = _http.Send(request);
+            HttpResponseMessage response = _http.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
         }
 
@@ -544,6 +541,7 @@ namespace DataQuery
                 { "Bathrooms",          (double)plan.Bathrooms },
                 { "Garage Bays",        plan.GarageBays        },
                 { "Garage Loading",     plan.GarageLoading     },
+                { "Master Bedroom",     plan.MasterBedLoc      },   
                 { "Living Area",        plan.LivingArea        },
                 { "Total Area",         plan.TotalArea         }
             };
@@ -583,6 +581,7 @@ namespace DataQuery
                 Bedrooms:       {planData.Bedrooms}
                 Bathrooms:      {planData.Bathrooms}
                 Stories:        {planData.Stories}
+                Master Bedroom: {planData.MasterBedLoc}
                 Garage Bays:    {planData.GarageBays}
                 Garage Loading: {planData.GarageLoading}
 

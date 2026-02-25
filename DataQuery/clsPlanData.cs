@@ -21,8 +21,9 @@ namespace DataQuery
         public string OverallWidth { get; set; }
         public string OverallDepth { get; set; }
         public int Stories { get; set; }
-        public int Bedrooms { get; set; }
+        public int Bedrooms { get; set; }        
         public decimal Bathrooms { get; set; }
+        public string MasterBedLoc { get; set; }
         public int GarageBays { get; set; }
         public string GarageLoading { get; set; }
         public int LivingArea { get; set; }
@@ -47,6 +48,7 @@ namespace DataQuery
                 Dimensions: {OverallWidth} W x {OverallDepth} D
                 Stories: {Stories}
                 Bedrooms: {Bedrooms} | Bathrooms: {Bathrooms}
+                Master Bedroom: {MasterBedLoc ?? "N/A"}
                 Garage: {GarageBays} bay(s)
                 Garage Loading: {GarageLoading} Load
                 Living Area: {LivingArea:N0} SF
