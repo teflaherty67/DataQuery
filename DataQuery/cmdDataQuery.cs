@@ -273,8 +273,14 @@ namespace DataQuery
             XYZ up = foundationView.UpDirection;
             bool isRotated = Math.Abs(up.Y) < 0.99;
 
+            // if the view is a dependent view, get the parent view instead
+            ElementId parentId = foundationView.GetPrimaryViewId();
+            ElementId collectFromId = (parentId != ElementId.InvalidElementId)
+                ? parentId
+                : foundationView.Id;
+
             // collect all single segment dimensions in the view
-            List<Dimension> listDims = new FilteredElementCollector(curDoc, foundationView.Id)
+            List<Dimension> listDims = new FilteredElementCollector(curDoc, collectFromId)
                 .OfClass(typeof(Dimension))
                 .Cast<Dimension>()
                 .Where(d => d.Segments.Size == 1 && d.Value.HasValue)
