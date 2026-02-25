@@ -242,6 +242,7 @@ namespace DataQuery
             planData.Bathrooms = bathrooms;
 
             planData.MasterBedLoc = GetMasterBedLoc(curDoc);
+            planData.MasonryPercentage = GetMasonryPercentage(curDoc);
             planData.GarageBays = CountGarageBays(curDoc);
             planData.LivingArea = GetLivingArea(curDoc);
             planData.TotalArea = GetTotalArea(curDoc);
@@ -401,6 +402,60 @@ namespace DataQuery
             return null;
         }
 
+        private string GetMasonryPercentage(Document curDoc)
+        {
+            // find the first Exterior Veneer Calculations schedule with non-zero values
+            ViewSchedule schedule = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewSchedule))
+                .Cast<ViewSchedule>()
+                .Where(vs => vs.Name.StartsWith("Exterior Veneer Calculations", StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault(vs => ScheduleHasNonZeroValues(vs));
+
+            if (schedule == null) return null;
+
+            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
+            int rowCount = body.NumberOfRows;
+            int materialCol = 0;
+            int percentageCol = body.NumberOfColumns - 1;
+
+            int totalMasonryPct = 0;
+
+            for (int row = 0; row < rowCount; row++)
+            {
+                string material = body.GetCellText(row, materialCol).Trim();
+
+                if (!material.Equals("Brick", StringComparison.OrdinalIgnoreCase) &&
+                    !material.Equals("Stone", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string pctText = body.GetCellText(row, percentageCol).Trim();
+                string cleaned = pctText.Replace("%", "").Trim();
+
+                if (int.TryParse(cleaned, out int pctValue))
+                    totalMasonryPct += pctValue;
+            }
+
+            return $"{totalMasonryPct}%";
+        }
+
+        private bool ScheduleHasNonZeroValues(ViewSchedule schedule)
+        {
+            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
+            int rowCount = body.NumberOfRows;
+            int areaCol = body.NumberOfColumns - 2;
+
+            for (int row = 0; row < rowCount; row++)
+            {
+                string areaText = body.GetCellText(row, areaCol).Trim();
+                string cleaned = areaText.Replace("SF", "").Trim();
+
+                if (int.TryParse(cleaned, out int areaValue) && areaValue > 0)
+                    return true;
+            }
+
+            return false;
+        }
+
         private int CountGarageBays(Document curDoc)
         {
             int bays = 0;
@@ -541,7 +596,8 @@ namespace DataQuery
                 { "Bathrooms",          (double)plan.Bathrooms },
                 { "Garage Bays",        plan.GarageBays        },
                 { "Garage Loading",     plan.GarageLoading     },
-                { "Master Bedroom",     plan.MasterBedLoc      },   
+                { "Master Bedroom",     plan.MasterBedLoc      },
+                { "Masonry",            plan.MasonryPercentage },
                 { "Living Area",        plan.LivingArea        },
                 { "Total Area",         plan.TotalArea         }
             };
@@ -581,7 +637,8 @@ namespace DataQuery
                 Bedrooms:       {planData.Bedrooms}
                 Bathrooms:      {planData.Bathrooms}
                 Stories:        {planData.Stories}
-                Master Bedroom: {planData.MasterBedLoc}
+                Master Bedroom: {planData.MasterBedLoc ?? "Not Found"}
+                Masonry:        {planData.MasonryPercentage ?? "N/A"}
                 Garage Bays:    {planData.GarageBays}
                 Garage Loading: {planData.GarageLoading}
 
