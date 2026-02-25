@@ -250,61 +250,112 @@ namespace DataQuery
 
         private void GetBuildingDimensions(Document curDoc, out string width, out string depth)
         {
+            // assign default values for the out parameters
             width = "0'-0\"";
             depth = "0'-0\"";
 
-            FilteredElementCollector collector = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(Wall))
-                .WhereElementIsNotElementType();
+            // find the Form/Foundation Plan view to use as the source for dimension extraction
+            ViewPlan foundationView = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewPlan))
+                .Cast<ViewPlan>()
+                .FirstOrDefault(v => v.Name.IndexOf("Form/Foundatin Plan, StringComparison.OrdinalIgnoreCase", StringComparison.OrdinalIgnoreCase ) >= 0);
 
-            if (!collector.Any()) return;
-
-            BoundingBoxXYZ bbox = null;
-
-            foreach (Wall wall in collector.Cast<Wall>())
+            // null check - if the view isn't found, show an error and return default dimensions
+            if (foundationView == null)
             {
-                BoundingBoxXYZ wallBox = wall.get_BoundingBox(null);
-                if (wallBox == null) continue;
+                Utils.TaskDialogWarning("Data Query", "Error",
+                    "No Form/Foundation Plan view found. Cannot extract building dimensions.");
+                return;
+            }
 
-                if (bbox == null)
+            // check if the view has been rotated by examining UpDirection
+            XYZ up = foundationView.UpDirection;
+            bool isRotated = Math.Abs(up.Y) < 0.99;
+
+            // collect all single segment dimensions in the view
+            List<Dimension> listDims = new FilteredElementCollector(curDoc, foundationView.Id)
+                .OfClass(typeof(Dimension))
+                .Cast<Dimension>()
+                .Where(d => d.Segments.Size == 1 && d.Value.HasValue)
+                .ToList();
+
+            // null check - if no dimensions are found, show an error and return default dimensions
+            if (!listDims.Any())
+            {
+                Utils.TaskDialogWarning("Data Query", "Error",
+                    "No single-segment dimensions found in the Form/Foundation Plan view. Cannot extract building dimensions.");
+                return;
+            }
+
+            // define variables for width and depth
+            Dimension widthDim = null;
+            Dimension depthDim = null;
+
+            // define variables to track the max dimension offset for width and depth
+             double maxWidthOffset = double.MinValue;
+             double maxDepthOffset = double.MinValue;
+
+            // loop through dimensions to find the ones that are likely overall width and depth based on their orientation and offset
+            foreach (Dimension curDim in listDims)
+            {
+                // cast dimension curve to Line - if it fails, skip this dimension
+                Line dimLine = curDim.Curve as Line;
+                if (dimLine == null) continue;
+
+                // get the normalized direction of the dimension line
+                XYZ dir = (dimLine.Direction).Normalize();
+
+                // determine if horizontal or vertical based on view rotation
+                bool isHorizontal = isRotated
+                    ? Math.Abs(dir.Y) > 0.99
+                    : Math.Abs(dir.X) > 0.99;
+
+                bool isVertical = isRotated
+                    ? Math.Abs(dir.X) > 0.99
+                    : Math.Abs(dir.Y) > 0.99;
+
+                // get the dimension origin to determine it's distance from the structure
+                XYZ dimOrigin = dimLine.Origin;
+
+                if (isHorizontal)
                 {
-                    bbox = wallBox;
+                    // horzontal dimension - candidate for width
+                    // farthest from the structure has the most extreme Y value
+                    double offset = Math.Abs(dimOrigin.Y);
+
+                    // check if this dimension is farther than the current max width offset
+                    if (offset > maxWidthOffset)
+                    {
+                        // if yes, update the max width offset and assign this dimension as the width dimension
+                        maxWidthOffset = offset;
+                        widthDim = curDim;
+                    }
                 }
-                else
+
+                else if (isVertical)
                 {
-                    bbox.Min = new XYZ(Math.Min(bbox.Min.X, wallBox.Min.X),
-                                       Math.Min(bbox.Min.Y, wallBox.Min.Y),
-                                       Math.Min(bbox.Min.Z, wallBox.Min.Z));
-                    bbox.Max = new XYZ(Math.Max(bbox.Max.X, wallBox.Max.X),
-                                       Math.Max(bbox.Max.Y, wallBox.Max.Y),
-                                       Math.Max(bbox.Max.Z, wallBox.Max.Z));
+                    // vertical dimension - candidate for depth
+                    // farthest from the structure has the most extreme X value
+                    double offset = Math.Abs(dimOrigin.X);
+
+                    // check if this dimension is farther than the current max depth offset
+                    if (offset > maxDepthOffset)
+                    {
+                        // if yes, update the max depth offset and assign this dimension as the depth dimension
+                        maxDepthOffset = offset;
+                        depthDim = curDim;
+                    }
                 }
             }
 
-            if (bbox != null)
-            {
-                width = FormatDimension(bbox.Max.X - bbox.Min.X);
-                depth = FormatDimension(bbox.Max.Y - bbox.Min.Y);
-            }
-        }
+            // if valid dimensions are foudn, extract their values as strings
+            if (widthDim != null)
+                width = widthDim.ValueString;
+            
+            if (depthDim != null)
+                depth = depthDim.ValueString;
 
-        private string FormatDimension(double decimalFeet)
-        {
-            int feet = (int)Math.Floor(decimalFeet);
-            double totalInches = (decimalFeet - feet) * 12.0;
-            int inches = (int)Math.Floor(totalInches);
-            double remainingInches = totalInches - inches;
-            string fraction = "";
-
-            if (remainingInches >= 0.25 && remainingInches < 0.75)
-                fraction = " 1/2";
-            else if (remainingInches >= 0.75)
-                inches++;
-
-            if (inches >= 12) { feet++; inches -= 12; }
-
-            return $"{feet}'-{inches}{fraction}\"";
-        }
+        }          
 
         private int CountStories(Document curDoc)
         {
