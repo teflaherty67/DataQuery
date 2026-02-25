@@ -283,7 +283,7 @@ namespace DataQuery
             List<Dimension> listDims = new FilteredElementCollector(curDoc, collectFromId)
                 .OfClass(typeof(Dimension))
                 .Cast<Dimension>()
-                .Where(d => d.Segments.Size == 1 && d.Value.HasValue)
+                .Where(d => d.Segments.Size == 0 && d.Value.HasValue)
                 .ToList();
 
             // null check - if no dimensions are found, show an error and return default dimensions
