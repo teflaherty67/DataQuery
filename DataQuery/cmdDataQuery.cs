@@ -255,10 +255,11 @@ namespace DataQuery
             depth = "0'-0\"";
 
             // find the Form/Foundation Plan view to use as the source for dimension extraction
-            ViewPlan foundationView = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(ViewPlan))
-                .Cast<ViewPlan>()
-                .FirstOrDefault(v => v.Name.IndexOf("Form/Foundatin Plan, StringComparison.OrdinalIgnoreCase", StringComparison.OrdinalIgnoreCase ) >= 0);
+            View foundationView = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(View))
+                .Cast<View>()
+                .FirstOrDefault(v => v.Name.IndexOf("Form/Foundation Plan", StringComparison.OrdinalIgnoreCase) >= 0
+                      && !v.IsTemplate);
 
             // null check - if the view isn't found, show an error and return default dimensions
             if (foundationView == null)
