@@ -18,7 +18,7 @@ namespace DataQuery
     /// </summary>
 
     [Transaction(TransactionMode.Manual)]
-    public class cmdDataQuery : IExternalCommand
+    public class cmdDataExport : IExternalCommand
     {
         // declare variable for Airtable API client
         private const string AirtableApiKey = apiSecrets.AirtableApiKey;
