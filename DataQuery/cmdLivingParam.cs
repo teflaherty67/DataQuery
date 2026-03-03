@@ -63,6 +63,26 @@ namespace DataQuery
                     return Result.Failed;
                 }
 
+                // step 5: open the shared parameter file and get the definition for Living Area
+                string originalParamFile = uiapp.Application.SharedParametersFilename;
+                uiapp.Application.SharedParametersFilename = SharedParamFile;
+
+                // open the shared parameter file
+                DefinitionFile defFile = uiapp.Application.OpenSharedParameterFile();
+
+                // null check the definition file
+                if (defFile == null)
+                {
+                    // notify the user if the shared parameter file could not be opened
+                    Utils.TaskDialogError("Living Param", "Error",
+                        "Could not open the shared parameter file.");
+
+                    // restore the original shared parameter file path and exit
+                    uiapp.Application.SharedParametersFilename = originalParamFile;
+                    return Result.Failed;
+                }
+
+
 
             }
             catch (Exception)
