@@ -12,8 +12,8 @@ namespace DataQuery
     ///   1. Add any missing shared parameters to the project
     ///   2. Launch frmProjInfo for user input
     ///   3. Write the values to Project Information parameters
-    ///   3. Extract plan data from the active model
-    ///   4. Write the data to Airtable
+    ///   4. Extract plan data from the active model
+    ///   5. Write the data to Airtable
     /// Requires: clsPlanData.cs, frmProjInfo.xaml
     /// </summary>
 
@@ -28,17 +28,19 @@ namespace DataQuery
         // Shared HTTP client instance for all Airtable API requests
         private static readonly HttpClient _http = new HttpClient();
 
-        // declare variables for Shared Parameter file and parameter group
+        // declare variable for Shared Parameter file path
         private const string SharedParamFile = @"S:\Shared Folders\Lifestyle USA Design\Library 2026\LD_Shared-Parameters_Master.txt";
-        private const string SharedParamGroup = "Project Information";
 
-        // define list of required shared parameters to add to the project if they are missing
-        private static readonly List<string> RequiredParams = new List<string>
+        // Maps each required parameter name to its shared parameter group and binding category.
+        // Code Masonry lives in the "Title Block" group and is bound to sheets;
+        // all other parameters live in "Project Information" and are bound to ProjectInformation.
+        private static readonly Dictionary<string, (string Group, BuiltInCategory Category)> RequiredParams = new()
         {
-            "Spec Level",
-            "Client Division",
-            "Client Subdivision",
-            "Garage Loading"
+            { "Spec Level",         ("Project Information", BuiltInCategory.OST_ProjectInformation) },
+            { "Client Division",    ("Project Information", BuiltInCategory.OST_ProjectInformation) },
+            { "Client Subdivision", ("Project Information", BuiltInCategory.OST_ProjectInformation) },
+            { "Garage Loading",     ("Project Information", BuiltInCategory.OST_ProjectInformation) },
+            { "Code Masonry",       ("Title Block",         BuiltInCategory.OST_Sheets)             }
         };
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -51,22 +53,6 @@ namespace DataQuery
             // wrap the main logic in a try-catch block to handle any unexpected errors gracefully
             try
             {
-                // if Living Area parameter does not exist on sheets, run migration first
-                if (!Utils.DoesProjectParamExist(curDoc, "Living Area"))
-                {
-                    // notify user about missing parameter and impending migration
-                    Utils.TaskDialogInformation("Data Export", "Migration Required",
-                        "The 'Living Area' parameter was not found. The Sq Ft migration will now run.");
-
-                    string migrationMessage = string.Empty;
-                    ElementSet migrationElements = new ElementSet();
-                    cmdLivingParam migration = new cmdLivingParam();
-                    Result migrationResult = migration.Execute(commandData, ref migrationMessage, migrationElements);
-
-                    if (migrationResult != Result.Succeeded)
-                        return Result.Failed;
-                }
-
                 // 1. Add any missing shared parameters to the project
                 Result paramResult = AddMissingParameters(uiapp, curDoc);
                 if (paramResult != Result.Succeeded)
@@ -78,7 +64,7 @@ namespace DataQuery
                 if (dialogResult != true)
                     return Result.Cancelled;
 
-                // 3. Write form values to Project Information
+                // 3. Write form values to Project Information (and Code Masonry to Cover sheets if applicable)
                 WriteValuesToProjectInfo(curDoc, curForm);
 
                 // 4. Extract plan data
@@ -87,12 +73,12 @@ namespace DataQuery
                 if (planData == null)
                 {
                     Utils.TaskDialogError("Data Query", "Error", "Unable to extract plan data from the model.");
-                    return Result.Succeeded; // ← not Failed
+                    return Result.Succeeded; // ← not Failed, to preserve local parameter writes
                 }
 
                 // 5. Show confirmation
                 if (!ShowConfirmationDialog(planData))
-                    return Result.Succeeded; // ← not Cancelled
+                    return Result.Succeeded; // ← not Cancelled, to preserve local parameter writes
 
                 // 6. Write to Airtable - isolated try-catch so Revit doesn't roll back on failure
                 try
@@ -128,7 +114,7 @@ namespace DataQuery
                 Utils.TaskDialogError("Data Query", "Error", $"An error occurred:\n{ex.Message}");
                 return Result.Failed;
             }
-        }        
+        }
 
         #region Add Missing Parameters
 
@@ -144,12 +130,12 @@ namespace DataQuery
             List<string> addedParams = new List<string>();
             List<string> existingParams = new List<string>();
 
-            foreach (string curParam in RequiredParams)
+            foreach (string paramName in RequiredParams.Keys)
             {
-                if (Utils.DoesProjectParamExist(curDoc, curParam))
-                    existingParams.Add(curParam);
+                if (Utils.DoesProjectParamExist(curDoc, paramName))
+                    existingParams.Add(paramName);
                 else
-                    addedParams.Add(curParam);
+                    addedParams.Add(paramName);
             }
 
             if (addedParams.Count == 0)
@@ -169,33 +155,37 @@ namespace DataQuery
                 return Result.Failed;
             }
 
-            CategorySet catSet = new CategorySet();
-            Category catProjInfo = curDoc.Settings.Categories.get_Item(BuiltInCategory.OST_ProjectInformation);
-            catSet.Insert(catProjInfo);
-            InstanceBinding instBinding = uiapp.Application.Create.NewInstanceBinding(catSet);
-
             using (Transaction t = new Transaction(curDoc, "Add Shared Parameters"))
             {
                 t.Start();
 
-                foreach (string curParamName in addedParams)
+                // Group params to add by binding category so each category gets one InstanceBinding
+                foreach (var catGroup in addedParams.GroupBy(p => RequiredParams[p].Category))
                 {
-                    Definition curDef = Utils.GetParameterDefinitionFromFile(curDefFile, SharedParamGroup, curParamName);
+                    CategorySet catSet = new CategorySet();
+                    catSet.Insert(curDoc.Settings.Categories.get_Item(catGroup.Key));
+                    InstanceBinding instBinding = uiapp.Application.Create.NewInstanceBinding(catSet);
 
-                    if (curDef == null)
+                    foreach (string paramName in catGroup)
                     {
-                        Utils.TaskDialogError("Data Query", "Error",
-                            $"Could not find definition for parameter '{curParamName}' in shared parameter file:\n{SharedParamFile}");
-                        continue;
-                    }
+                        Definition curDef = Utils.GetParameterDefinitionFromFile(
+                            curDefFile, RequiredParams[paramName].Group, paramName);
 
-                    curDoc.ParameterBindings.Insert(curDef, instBinding);
+                        if (curDef == null)
+                        {
+                            Utils.TaskDialogError("Data Query", "Error",
+                                $"Could not find definition for '{paramName}' in shared parameter file:\n{SharedParamFile}");
+                            continue;
+                        }
+
+                        curDoc.ParameterBindings.Insert(curDef, instBinding);
+                    }
                 }
 
                 t.Commit();
             }
 
-            // Notify user of results
+            // Build and display result message
             string resultMessage = $"Added {addedParams.Count} parameter(s):\n";
             foreach (string name in addedParams)
                 resultMessage += $"  - {name}\n";
@@ -226,6 +216,20 @@ namespace DataQuery
                 Common.Utils.SetParameterByName(projInfo, "Client Division", curForm.ClientDivision);
                 Common.Utils.SetParameterByName(projInfo, "Client Subdivision", curForm.ClientSubdivision);
                 Common.Utils.SetParameterByName(projInfo, "Garage Loading", curForm.GarageLoading);
+
+                // If Code Masonry was newly added and the user entered a value, write it to all Cover sheets
+                if (!string.IsNullOrEmpty(curForm.CodeMasonry) &&
+                    int.TryParse(curForm.CodeMasonry, out int masonryValue))
+                {
+                    IEnumerable<ViewSheet> coverSheets = new FilteredElementCollector(curDoc)
+                        .OfClass(typeof(ViewSheet))
+                        .Cast<ViewSheet>()
+                        .Where(s => s.Name.IndexOf("Cover", StringComparison.OrdinalIgnoreCase) >= 0
+                                 && !s.IsTemplate);
+
+                    foreach (ViewSheet sheet in coverSheets)
+                        Common.Utils.SetParameterByName(sheet, "Code Masonry", masonryValue);
+                }
 
                 t.Commit();
             }
@@ -287,17 +291,17 @@ namespace DataQuery
                 return;
             }
 
-            // get the view's value of RightDirection and UpDirections to determine width and depth orientation
+            // get the view's RightDirection and UpDirection to determine width and depth orientation
             XYZ up = foundationView.UpDirection.Normalize();
             XYZ right = foundationView.RightDirection.Normalize();
 
-            // if the view is a dependent view, get the parent view instead
+            // if the view is a dependent view, collect dimensions from the parent view instead
             ElementId parentId = foundationView.GetPrimaryViewId();
             ElementId collectFromId = (parentId != ElementId.InvalidElementId)
                 ? parentId
                 : foundationView.Id;
 
-            // collect all single segment dimensions in the view
+            // collect all single-segment dimensions in the view
             List<Dimension> listDims = new FilteredElementCollector(curDoc, collectFromId)
                 .OfClass(typeof(Dimension))
                 .Cast<Dimension>()
@@ -312,28 +316,19 @@ namespace DataQuery
                 return;
             }
 
-            // define variables for width and depth
             Dimension widthDim = null;
             Dimension depthDim = null;
-
-            // define variables to track the largest dimension value for width and depth
             double maxWidthValue = double.MinValue;
             double maxDepthValue = double.MinValue;
 
-            // loop through dimensions to find the ones that are likely overall width and depth based on their orientation and offset
             foreach (Dimension curDim in listDims)
             {
-                // cast dimension curve to Line - if it fails, skip this dimension
                 Line dimLine = curDim.Curve as Line;
                 if (dimLine == null) continue;
 
-                // get the normalized direction of the dimension line
-                XYZ dimDir = (dimLine.Direction).Normalize();
+                XYZ dimDir = dimLine.Direction.Normalize();
 
-                // check if dimension runs parallel to view's right direction = width
                 bool isWidth = Math.Abs(dimDir.DotProduct(right)) > 0.99;
-
-                // check if dimension runs parallel to view's up direction = depth
                 bool isDepth = Math.Abs(dimDir.DotProduct(up)) > 0.99;
 
                 double value = curDim.Value.Value;
@@ -350,14 +345,9 @@ namespace DataQuery
                 }
             }
 
-            // if valid dimensions are found, extract their values as strings
-            if (widthDim != null)
-                width = widthDim.ValueString;
-            
-            if (depthDim != null)
-                depth = depthDim.ValueString;
-
-        }          
+            if (widthDim != null) width = widthDim.ValueString;
+            if (depthDim != null) depth = depthDim.ValueString;
+        }
 
         private int CountStories(Document curDoc)
         {
@@ -404,7 +394,6 @@ namespace DataQuery
                 .OfType<Room>())
             {
                 if (room.Area <= 0) continue;
-
                 if (!room.Name.ToLower().Contains("master")) continue;
 
                 string levelName = room.Level?.Name ?? string.Empty;
@@ -420,56 +409,26 @@ namespace DataQuery
 
         private string GetMasonryPercentage(Document curDoc)
         {
-            // find the first Exterior Veneer Calculations schedule with non-zero values
-            ViewSchedule schedule = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(ViewSchedule))
-                .Cast<ViewSchedule>()
-                .Where(vs => vs.Name.StartsWith("Exterior Veneer Calculations", StringComparison.OrdinalIgnoreCase))
-                .FirstOrDefault(vs => ScheduleHasNonZeroValues(vs));
+            int maxMasonry = 0;
 
-            if (schedule == null) return null;
+            // find all Cover sheets and return the largest Code Masonry value across them
+            IEnumerable<ViewSheet> coverSheets = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .Where(s => s.Name.IndexOf("Cover", StringComparison.OrdinalIgnoreCase) >= 0
+                         && !s.IsTemplate);
 
-            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
-            int rowCount = body.NumberOfRows;
-            int materialCol = 0;
-            int percentageCol = body.NumberOfColumns - 1;
-
-            int totalMasonryPct = 0;
-
-            for (int row = 0; row < rowCount; row++)
+            foreach (ViewSheet sheet in coverSheets)
             {
-                string material = body.GetCellText(row, materialCol).Trim();
+                Parameter codeMasonry = Utils.GetParameterByName(sheet, "Code Masonry");
+                if (codeMasonry == null) continue;
 
-                if (!material.Equals("Brick", StringComparison.OrdinalIgnoreCase) &&
-                    !material.Equals("Stone", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string pctText = body.GetCellText(row, percentageCol).Trim();
-                string cleaned = pctText.Replace("%", "").Trim();
-
-                if (int.TryParse(cleaned, out int pctValue))
-                    totalMasonryPct += pctValue;
+                int value = (int)codeMasonry.AsDouble();
+                if (value > maxMasonry)
+                    maxMasonry = value;
             }
 
-            return $"{totalMasonryPct}%";
-        }
-
-        private bool ScheduleHasNonZeroValues(ViewSchedule schedule)
-        {
-            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
-            int rowCount = body.NumberOfRows;
-            int areaCol = body.NumberOfColumns - 2;
-
-            for (int row = 0; row < rowCount; row++)
-            {
-                string areaText = body.GetCellText(row, areaCol).Trim();
-                string cleaned = areaText.Replace("SF", "").Trim();
-
-                if (int.TryParse(cleaned, out int areaValue) && areaValue > 0)
-                    return true;
-            }
-
-            return false;
+            return maxMasonry == 0 ? "N/A" : $"{maxMasonry}%";
         }
 
         private int CountGarageBays(Document curDoc)
@@ -495,32 +454,33 @@ namespace DataQuery
 
         private int GetLivingArea(Document curDoc)
         {
-            int maxLivingArea = 0;
+            ViewSchedule schedule = Utils.GetFloorAreaSchedule(curDoc);
+            if (schedule == null) return 0;
 
-            // collect all sheets whose name contains "Cover", excluding templates
-            IEnumerable<ViewSheet> coverSheets = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(ViewSheet))
-                .Cast<ViewSheet>()
-                .Where(s => s.Name.IndexOf("Cover", StringComparison.OrdinalIgnoreCase) >= 0);
+            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
+            int rowCount = body.NumberOfRows;
+            int areaCol = body.NumberOfColumns - 1;
 
-            // loop through the cover sheets and find the largest Living Area value
-            foreach (ViewSheet sheet in coverSheets)
+            for (int row = 0; row < rowCount; row++)
             {
-                // get the Living Area parameter from the sheet
-                Parameter livingArea = Utils.GetParameterByName(sheet, "Living Area");
+                if (!body.GetCellText(row, 0).Trim().Equals("Living", StringComparison.OrdinalIgnoreCase))
+                    continue;
 
-                // skip if the parameter is not found
-                if (livingArea == null) continue;
+                string areaText = body.GetCellText(row, areaCol).Trim();
+                if (!string.IsNullOrEmpty(areaText)) return ParseAreaValue(areaText);
 
-                // cast the value to an integer
-                int value = (int)livingArea.AsDouble();
+                for (int sub = row + 1; sub < rowCount; sub++)
+                {
+                    string subName = body.GetCellText(sub, 0).Trim();
+                    string subArea = body.GetCellText(sub, areaCol).Trim();
 
-                // update the max value if this sheet has a larger Living Area
-                if (value > maxLivingArea)
-                    maxLivingArea = value;
+                    if (!string.IsNullOrEmpty(subName) && !subName.Contains("Floor")) break;
+                    if (string.IsNullOrEmpty(subName) && !string.IsNullOrEmpty(subArea))
+                        return ParseAreaValue(subArea);
+                }
             }
 
-            return maxLivingArea;
+            return 0;
         }
 
         private int GetTotalArea(Document curDoc)
@@ -543,7 +503,7 @@ namespace DataQuery
 
         private int ParseAreaValue(string areaText)
         {
-            string cleaned = areaText.Replace("SF", "").Trim();
+            string cleaned = areaText.Replace("SF", "").Replace(",", "").Trim();
             return int.TryParse(cleaned, out int result) ? result : 0;
         }
 
@@ -664,7 +624,6 @@ namespace DataQuery
 
         internal static PushButtonData GetButtonData()
         {
-            // use this method to define the properties for this command in the Revit ribbon
             string buttonInternalName = "btnCommand1";
             string buttonTitle = "Button 1";
 

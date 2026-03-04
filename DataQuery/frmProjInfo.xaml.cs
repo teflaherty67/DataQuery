@@ -12,6 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
+
 namespace DataQuery
 {
     /// <summary>
@@ -33,7 +34,6 @@ namespace DataQuery
 
         private static readonly List<string> ClientNames = new()
         {
-            // Add your client names here
             "DRB Group",
             "Lennar Homes",
             "LGI Homes"
@@ -41,7 +41,6 @@ namespace DataQuery
 
         private static readonly List<string> ClientDivisions = new()
         {
-            // Add your division names here
             "Central Texas",
             "Dallas-Fort Worth",
             "Florida",
@@ -74,6 +73,14 @@ namespace DataQuery
         public string ClientSubdivision => tbxClientSubdivision.Text.Trim();
         public string GarageLoading => cbxGarageLoading.Text.Trim();
 
+        /// <summary>
+        /// Returns the Code Masonry value if the field was shown (parameter was newly added),
+        /// or null if the field was hidden (parameter already had values on Cover sheets).
+        /// </summary>
+        public string CodeMasonry => tbxCodeMasonry.Visibility == Visibility.Visible
+            ? tbxCodeMasonry.Text.Trim()
+            : null;
+
         #endregion
 
         #region Constructor
@@ -84,6 +91,13 @@ namespace DataQuery
             CurDoc = curDoc;
             PopulateDropdowns();
             LoadExistingValues();
+
+            // Register paste handler for numeric-only validation on Code Masonry TextBox
+            DataObject.AddPastingHandler(tbxCodeMasonry, OnCodeMasonryPaste);
+
+            // Hide the Code Masonry row if Cover sheets already have values for the parameter
+            if (CodeMasonryAlreadyHasValues())
+                HideCodeMasonryRow();
         }
 
         #endregion
@@ -115,8 +129,7 @@ namespace DataQuery
             SetComboValue(cbxClientName, clientNameParam?.AsString());
         }
 
-
-        private static void SetComboValue(System.Windows.Controls.ComboBox combo, string value)
+        private static void SetComboValue(ComboBox combo, string value)
         {
             if (string.IsNullOrEmpty(value)) return;
 
@@ -125,6 +138,36 @@ namespace DataQuery
                 combo.SelectedIndex = index;
             else
                 combo.Text = value;
+        }
+
+        /// <summary>
+        /// Returns true if any Cover sheet already has a non-zero Code Masonry value,
+        /// indicating the parameter was populated before this command ran.
+        /// Returns false if the parameter was just added (default value of 0) or doesn't exist.
+        /// </summary>
+        private bool CodeMasonryAlreadyHasValues()
+        {
+            return new FilteredElementCollector(CurDoc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .Where(s => s.Name.IndexOf("Cover", StringComparison.OrdinalIgnoreCase) >= 0
+                         && !s.IsTemplate)
+                .Any(s =>
+                {
+                    Parameter p = Common.Utils.GetParameterByName(s, "Code Masonry");
+                    return p != null && p.AsDouble() > 0;
+                });
+        }
+
+        /// <summary>
+        /// Collapses the Code Masonry label, TextBox, and its spacer row.
+        /// </summary>
+        private void HideCodeMasonryRow()
+        {
+            gridContent.RowDefinitions[11].Height = new GridLength(0); // spacer before Code Masonry
+            gridContent.RowDefinitions[12].Height = new GridLength(0); // Code Masonry row
+            lblCodeMasonry.Visibility = Visibility.Collapsed;
+            tbxCodeMasonry.Visibility = Visibility.Collapsed;
         }
 
         #endregion
@@ -178,6 +221,36 @@ namespace DataQuery
         private void btnHelp_Click(object sender, RoutedEventArgs e)
         {
             // Add help content here
+        }
+
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            DragMove();
+        }
+
+        /// <summary>
+        /// Restricts Code Masonry TextBox to numeric input only.
+        /// </summary>
+        private void tbxCodeMasonry_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        {
+            e.Handled = !e.Text.All(char.IsDigit);
+        }
+
+        /// <summary>
+        /// Restricts Code Masonry TextBox to numeric paste only.
+        /// </summary>
+        private void OnCodeMasonryPaste(object sender, DataObjectPastingEventArgs e)
+        {
+            if (e.DataObject.GetDataPresent(typeof(string)))
+            {
+                string text = (string)e.DataObject.GetData(typeof(string));
+                if (!text.All(char.IsDigit))
+                    e.CancelCommand();
+            }
+            else
+            {
+                e.CancelCommand();
+            }
         }
 
         #endregion

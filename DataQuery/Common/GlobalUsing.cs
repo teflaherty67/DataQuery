@@ -17,3 +17,6 @@ global using TaskDialog = Autodesk.Revit.UI.TaskDialog;
 global using Icon = Autodesk.Revit.UI.TaskDialogIcon;
 global using View = Autodesk.Revit.DB.View;
 global using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
+global using Visibility = System.Windows.Visibility;
+global using ComboBox = System.Windows.Controls.ComboBox;
+global using DataObject = System.Windows.DataObject;

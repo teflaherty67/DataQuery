@@ -5,9 +5,9 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DataQuery"
         mc:Ignorable="d"
-        Title="Project Informatin"
-        Height="340" Width="300"
-        MinWidth="280" MinHeight="320"
+        Title="Project Information"
+        Height="370" Width="300"
+        MinWidth="280" MinHeight="350"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
         WindowStyle="None"
@@ -77,7 +77,8 @@
                     Background="#2B5A8E"
                     CornerRadius="8,8,0,0"
                     BorderBrush="#E5E7EB"
-                    BorderThickness="0,0,0,1">
+                    BorderThickness="0,0,0,1"
+                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid>
                     <TextBlock Text="Project Information"
                                FontSize="14"
@@ -122,21 +123,38 @@
 
             <!-- Content Area -->
             <Border Grid.Row="1" Margin="15">
-                <Grid>
+                <Grid x:Name="gridContent">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
+                        <!-- 0:  Plan Name -->
                         <RowDefinition Height="10"/>
+                        <!-- 1:  spacer -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 2:  Spec Level -->
                         <RowDefinition Height="10"/>
+                        <!-- 3:  spacer -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 4:  Client Name -->
                         <RowDefinition Height="10"/>
+                        <!-- 5:  spacer -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 6:  Client Division -->
                         <RowDefinition Height="10"/>
+                        <!-- 7:  spacer -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 8:  Client Subdivision -->
                         <RowDefinition Height="10"/>
+                        <!-- 9:  spacer -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 10: Garage Loading -->
+                        <RowDefinition Height="10"/>
+                        <!-- 11: spacer (collapses with Code Masonry) -->
+                        <RowDefinition Height="Auto"/>
+                        <!-- 12: Code Masonry (conditionally visible) -->
                         <RowDefinition Height="*"/>
+                        <!-- 13: flex space -->
                         <RowDefinition Height="Auto"/>
+                        <!-- 14: Buttons -->
                     </Grid.RowDefinitions>
 
                     <Grid.ColumnDefinitions>
@@ -168,8 +186,13 @@
                     <Label Grid.Row="10" Grid.Column="0" Content="Garage Loading:"/>
                     <ComboBox Grid.Row="10" Grid.Column="1" x:Name="cbxGarageLoading"/>
 
+                    <!-- Code Masonry (conditionally visible — hidden if parameter already has values) -->
+                    <Label Grid.Row="12" Grid.Column="0" x:Name="lblCodeMasonry" Content="Code Masonry %:"/>
+                    <TextBox Grid.Row="12" Grid.Column="1" x:Name="tbxCodeMasonry"
+                             PreviewTextInput="tbxCodeMasonry_PreviewTextInput"/>
+
                     <!-- Buttons -->
-                    <StackPanel Grid.Row="12" Grid.ColumnSpan="2"
+                    <StackPanel Grid.Row="14" Grid.ColumnSpan="2"
                                 Orientation="Horizontal"
                                 HorizontalAlignment="Right">
                         <Button x:Name="btnOK"
