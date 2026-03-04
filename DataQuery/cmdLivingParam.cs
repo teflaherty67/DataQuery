@@ -82,18 +82,86 @@ namespace DataQuery
                     return Result.Failed;
                 }
 
+                // step 6: get the Living Area definition from the shared parameter file
+                Definition newDef = Utils.GetParameterDefinitionFromFile(defFile, SharedParamGroup, NewParamName);
 
+                // null check the new definition
+                if (newDef == null)
+                {
+                    // notify the user if the Living Area definition could not be found in the shared parameter file
+                    Utils.TaskDialogError("Data Export", "Error",
+                        $"Could not find '{NewParamName}' in shared parameter file group '{SharedParamGroup}'.");
 
+                    // restore the original shared parameter file before exiting
+                    uiapp.Application.SharedParametersFilename = originalParamFile;
+
+                    return Result.Failed;
+                }
+
+                // step 7: get Sq Ft definition for removal later
+                DefinitionBindingMapIterator oldIter = curDoc.ParameterBindings.ForwardIterator();
+                Definition oldDef = null;
+                while (oldIter.MoveNext())
+                {
+                    if (oldIter.Key.Name.Equals(OldParamName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        oldDef = oldIter.Key;
+                        break;
+                    }
+                }
+
+                // step 8: add Living Area parameter to the project
+                CategorySet catSet = new CategorySet();
+                catSet.Insert(curDoc.Settings.Categories.get_Item(BuiltInCategory.OST_Sheets));
+                InstanceBinding instBinding = uiapp.Application.Create.NewInstanceBinding(catSet);
+
+                // create a transaction to add Living Area, assign values, and remove Sq Ft
+                using (Transaction t = new Transaction(curDoc, "Migrate Parameter Values"))
+                {
+                    // start the transaction
+                    t.Start();
+
+                    // add Living Area parameter to Sheets
+#if REVIT2024
+curDoc.ParameterBindings.Insert(newDef, instBinding, BuiltInParameterGroup.PG_IDENTITY_DATA);
+#else
+                    curDoc.ParameterBindings.Insert(newDef, instBinding, GroupTypeId.IdentityData);
+#endif
+                    // loop through the sheets and set Living Area value to the stored Sq Ft value
+                    foreach (ViewSheet sheet in sheets)
+                    {
+                        if (!dicSqFtValues.TryGetValue(sheet.Id, out double storedValue)) continue;
+                        if (storedValue <= 0) continue;
+
+                        Parameter livingArea = Utils.GetParameterByNameAndWritable(sheet, NewParamName);
+                        if (livingArea == null) continue;
+
+                        livingArea.Set(storedValue);
+                    }
+
+                    // remove the Sq Ft parameter binding from the project
+                    if (oldDef != null)
+                        curDoc.ParameterBindings.Remove(oldDef);
+
+                    // commit the transaction
+                    t.Commit();
+                }
+
+                // notify the user of success
+                Utils.TaskDialogInformation("Data Export", "Migration Complete",
+                   $"'{OldParamName}' values have been migrated to '{NewParamName}' on {dicSqFtValues.Count} sheet(s).\n" +
+                   $"'{OldParamName}' parameter has been removed.");
+
+                return Result.Succeeded;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-
-                throw;
+                message = ex.Message;
+                Utils.TaskDialogError("Living Param", "Error", $"An error occurred:\n{ex.Message}");
+                return Result.Failed;
             }
-
-
-            return Result.Succeeded;
         }
+
         internal static PushButtonData GetButtonData()
         {
             // use this method to define the properties for this command in the Revit ribbon
@@ -111,5 +179,4 @@ namespace DataQuery
             return myButtonData.Data;
         }
     }
-
 }

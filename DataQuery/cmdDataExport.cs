@@ -51,6 +51,22 @@ namespace DataQuery
             // wrap the main logic in a try-catch block to handle any unexpected errors gracefully
             try
             {
+                // if Living Area parameter does not exist on sheets, run migration first
+                if (!Utils.DoesProjectParamExist(curDoc, "Living Area"))
+                {
+                    // notify user about missing parameter and impending migration
+                    Utils.TaskDialogInformation("Data Export", "Migration Required",
+                        "The 'Living Area' parameter was not found. The Sq Ft migration will now run.");
+
+                    string migrationMessage = string.Empty;
+                    ElementSet migrationElements = new ElementSet();
+                    cmdLivingParam migration = new cmdLivingParam();
+                    Result migrationResult = migration.Execute(commandData, ref migrationMessage, migrationElements);
+
+                    if (migrationResult != Result.Succeeded)
+                        return Result.Failed;
+                }
+
                 // 1. Add any missing shared parameters to the project
                 Result paramResult = AddMissingParameters(uiapp, curDoc);
                 if (paramResult != Result.Succeeded)
@@ -479,33 +495,32 @@ namespace DataQuery
 
         private int GetLivingArea(Document curDoc)
         {
-            ViewSchedule schedule = Utils.GetFloorAreaSchedule(curDoc);
-            if (schedule == null) return 0;
+            int maxLivingArea = 0;
 
-            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
-            int rowCount = body.NumberOfRows;
-            int areaCol = body.NumberOfColumns - 1;
+            // collect all sheets whose name contains "Cover", excluding templates
+            IEnumerable<ViewSheet> coverSheets = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .Where(s => s.Name.IndexOf("Cover", StringComparison.OrdinalIgnoreCase) >= 0);
 
-            for (int row = 0; row < rowCount; row++)
+            // loop through the cover sheets and find the largest Living Area value
+            foreach (ViewSheet sheet in coverSheets)
             {
-                if (!body.GetCellText(row, 0).Trim().Equals("Living", StringComparison.OrdinalIgnoreCase))
-                    continue;
+                // get the Living Area parameter from the sheet
+                Parameter livingArea = Utils.GetParameterByName(sheet, "Living Area");
 
-                string areaText = body.GetCellText(row, areaCol).Trim();
-                if (!string.IsNullOrEmpty(areaText)) return ParseAreaValue(areaText);
+                // skip if the parameter is not found
+                if (livingArea == null) continue;
 
-                for (int sub = row + 1; sub < rowCount; sub++)
-                {
-                    string subName = body.GetCellText(sub, 0).Trim();
-                    string subArea = body.GetCellText(sub, areaCol).Trim();
+                // cast the value to an integer
+                int value = (int)livingArea.AsDouble();
 
-                    if (!string.IsNullOrEmpty(subName) && !subName.Contains("Floor")) break;
-                    if (string.IsNullOrEmpty(subName) && !string.IsNullOrEmpty(subArea))
-                        return ParseAreaValue(subArea);
-                }
+                // update the max value if this sheet has a larger Living Area
+                if (value > maxLivingArea)
+                    maxLivingArea = value;
             }
 
-            return 0;
+            return maxLivingArea;
         }
 
         private int GetTotalArea(Document curDoc)
