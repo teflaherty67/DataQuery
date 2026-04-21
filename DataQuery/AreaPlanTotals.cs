@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using DataQuery.Common;
+using Area = Autodesk.Revit.DB.Area;
+using ViewPlan = Autodesk.Revit.DB.ViewPlan;
 
 namespace DataQuery
 {
@@ -38,7 +40,7 @@ namespace DataQuery
         }
 
         /// <summary>
-        /// Finds the AreaSchemeId for the elevation that actually has a non-zero Living area.
+        /// Finds the AreaScheme ElementId for the scheme that actually has a non-zero Living area.
         /// If multiple schemes have Living > 0, picks the one with the largest Living sum;
         /// tie-breaker is largest Total Covered sum.
         /// </summary>
@@ -49,8 +51,8 @@ namespace DataQuery
                 .OfClass(typeof(ViewPlan))
                 .Cast<ViewPlan>()
                 .Where(v => !v.IsTemplate && v.ViewType == ViewType.AreaPlan)
-                .Select(v => v.AreaSchemeId)
-                .Where(id => id != ElementId.InvalidElementId)
+                .Select(v => v.AreaScheme?.Id)
+                .Where(id => id != null && id != ElementId.InvalidElementId)
                 .Distinct()
                 .ToList();
 
@@ -62,7 +64,7 @@ namespace DataQuery
                 .OfCategory(BuiltInCategory.OST_Areas)
                 .WhereElementIsNotElementType()
                 .Cast<Area>()
-                .Where(a => a.AreaSchemeId != ElementId.InvalidElementId && a.Area > 0)
+                .Where(a => a.AreaScheme?.Id != null && a.AreaScheme.Id != ElementId.InvalidElementId && a.Area > 0)
                 .ToList();
 
             ElementId bestScheme = ElementId.InvalidElementId;
@@ -71,7 +73,7 @@ namespace DataQuery
 
             foreach (var schemeId in schemeIdsInUse)
             {
-                var schemeAreas = allAreas.Where(a => a.AreaSchemeId == schemeId);
+                var schemeAreas = allAreas.Where(a => a.AreaScheme?.Id == schemeId);
 
                 double living = schemeAreas
                     .Where(a => string.Equals((a.Name ?? "").Trim(), LivingName, StringComparison.OrdinalIgnoreCase))
@@ -105,7 +107,7 @@ namespace DataQuery
                 .OfCategory(BuiltInCategory.OST_Areas)
                 .WhereElementIsNotElementType()
                 .Cast<Area>()
-                .Where(a => a.AreaSchemeId == schemeId && a.Area > 0);
+                .Where(a => a.AreaScheme?.Id == schemeId && a.Area > 0);
         }
 
         private static bool IsAreaCategory(Area area, string expected)
