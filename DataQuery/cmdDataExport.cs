@@ -418,40 +418,26 @@ namespace DataQuery
             return null;
         }
 
-        private string GetMasonryPercentage(Document curDoc)
+        private int? GetMasonryPercentage(Document curDoc)
         {
-            // find the first Exterior Veneer Calculations schedule with non-zero values
-            ViewSchedule schedule = new FilteredElementCollector(curDoc)
-                .OfClass(typeof(ViewSchedule))
-                .Cast<ViewSchedule>()
-                .Where(vs => vs.Name.StartsWith("Exterior Veneer Calculations", StringComparison.OrdinalIgnoreCase))
-                .FirstOrDefault(vs => ScheduleHasNonZeroValues(vs));
+            int maxValue = 0;
 
-            if (schedule == null) return null;
+            IEnumerable<ViewSheet> sheets = new FilteredElementCollector(curDoc)
+                .OfClass(typeof(ViewSheet))
+                .Cast<ViewSheet>()
+                .Where(s => !s.IsTemplate);
 
-            TableSectionData body = schedule.GetTableData().GetSectionData(SectionType.Body);
-            int rowCount = body.NumberOfRows;
-            int materialCol = 0;
-            int percentageCol = body.NumberOfColumns - 1;
-
-            int totalMasonryPct = 0;
-
-            for (int row = 0; row < rowCount; row++)
+            foreach (ViewSheet sheet in sheets)
             {
-                string material = body.GetCellText(row, materialCol).Trim();
+                Parameter codeMasonry = Utils.GetParameterByName(sheet, "Code Masonry");
+                if (codeMasonry == null) continue;
 
-                if (!material.Equals("Brick", StringComparison.OrdinalIgnoreCase) &&
-                    !material.Equals("Stone", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                string pctText = body.GetCellText(row, percentageCol).Trim();
-                string cleaned = pctText.Replace("%", "").Trim();
-
-                if (int.TryParse(cleaned, out int pctValue))
-                    totalMasonryPct += pctValue;
+                string raw = codeMasonry.AsString() ?? codeMasonry.AsValueString();
+                if (int.TryParse(raw, out int value) && value > maxValue)
+                    maxValue = value;
             }
 
-            return $"{totalMasonryPct}%";
+            return maxValue > 0 ? maxValue : null;
         }
 
         private bool ScheduleHasNonZeroValues(ViewSchedule schedule)
@@ -617,6 +603,9 @@ namespace DataQuery
                 { "Total Area",         plan.TotalArea         }
             };
 
+            if (plan.MasonryPercentage.HasValue)
+                fields["Masonry"] = plan.MasonryPercentage.Value / 100.0;
+
             return JsonSerializer.Serialize(new { fields });
         }
 
@@ -653,7 +642,7 @@ namespace DataQuery
                 Bathrooms:      {planData.Bathrooms}
                 Stories:        {planData.Stories}
                 Master Bedroom: {planData.MasterBedLoc ?? "Not Found"}
-                Masonry:        {planData.MasonryPercentage ?? "N/A"}
+                Masonry:        {(planData.MasonryPercentage.HasValue ? planData.MasonryPercentage.Value.ToString() : "N/A")}
                 Garage Bays:    {planData.GarageBays}
                 Garage Loading: {planData.GarageLoading}
 

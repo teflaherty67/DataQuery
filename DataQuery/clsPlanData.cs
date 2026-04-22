@@ -26,7 +26,7 @@ namespace DataQuery
         public string MasterBedLoc { get; set; }
         public int GarageBays { get; set; }
         public string GarageLoading { get; set; }
-        public string MasonryPercentage { get; set; }
+        public int? MasonryPercentage { get; set; }
         public int LivingArea { get; set; }
         public int TotalArea { get; set; }
 
@@ -52,7 +52,7 @@ namespace DataQuery
                 Master Bedroom: {MasterBedLoc ?? "N/A"}
                 Garage: {GarageBays} bay(s)
                 Garage Loading: {GarageLoading} Load
-                Masonry: {MasonryPercentage ?? "N/A"}
+                Masonry: {(MasonryPercentage.HasValue ? MasonryPercentage.Value.ToString() : "N/A")}
                 Living Area: {LivingArea:N0} SF
                 Total Area: {TotalArea:N0} SF";
         }
