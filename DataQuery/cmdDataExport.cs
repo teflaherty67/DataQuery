@@ -20,6 +20,8 @@ namespace DataQuery
     [Transaction(TransactionMode.Manual)]
     public class cmdDataExport : IExternalCommand
     {
+        #region Variables
+
         // declare variable for Airtable API client
         private const string AirtableApiKey = apiSecrets.AirtableApiKey;
         private const string AirtableBaseId = "appwAYciO1uHJiC7u";
@@ -41,12 +43,16 @@ namespace DataQuery
             "Garage Loading"
         };
 
+        #endregion
+
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
             // Revit application and document variables
             UIApplication uiapp = commandData.Application;
             UIDocument uidoc = uiapp.ActiveUIDocument;
             Document curDoc = uidoc.Document;
+
+            #region Main Logic
 
             // wrap the main logic in a try-catch block to handle any unexpected errors gracefully
             try
@@ -128,7 +134,9 @@ namespace DataQuery
                 Utils.TaskDialogError("Data Query", "Error", $"An error occurred:\n{ex.Message}");
                 return Result.Failed;
             }
-        }        
+        }
+
+            #endregion
 
         #region Add Missing Parameters
 
