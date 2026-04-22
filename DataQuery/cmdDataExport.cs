@@ -280,14 +280,13 @@ namespace DataQuery
             width = "0'-0\"";
             depth = "0'-0\"";
 
-            // find the Form/Foundation Plan view to use as the source for dimension extraction
+            // find the Form/Foundation Plan view
             View foundationView = new FilteredElementCollector(curDoc)
                 .OfClass(typeof(View))
                 .Cast<View>()
                 .FirstOrDefault(v => v.Name.IndexOf("Form/Foundation Plan", StringComparison.OrdinalIgnoreCase) >= 0
                       && !v.IsTemplate);
 
-            // null check - if the view isn't found, show an error and return default dimensions
             if (foundationView == null)
             {
                 Utils.TaskDialogWarning("Data Query", "Error",
@@ -295,24 +294,19 @@ namespace DataQuery
                 return;
             }
 
-            // get the view's value of RightDirection and UpDirections to determine width and depth orientation
-            XYZ up = foundationView.UpDirection.Normalize();
-            XYZ right = foundationView.RightDirection.Normalize();
-
-            // if the view is a dependent view, get the parent view instead
+            // if the view is a dependent view, collect from the parent instead
             ElementId parentId = foundationView.GetPrimaryViewId();
             ElementId collectFromId = (parentId != ElementId.InvalidElementId)
                 ? parentId
                 : foundationView.Id;
 
-            // collect all single segment dimensions in the view
+            // collect all single-segment dimensions with a valid value
             List<Dimension> listDims = new FilteredElementCollector(curDoc, collectFromId)
                 .OfClass(typeof(Dimension))
                 .Cast<Dimension>()
-                .Where(d => d.Segments.Size == 0 && d.Value.HasValue)
+                .Where(d => d.HasOneSegment() && d.Value.HasValue)
                 .ToList();
 
-            // null check - if no dimensions are found, show an error and return default dimensions
             if (!listDims.Any())
             {
                 Utils.TaskDialogWarning("Data Query", "Error",
@@ -320,29 +314,20 @@ namespace DataQuery
                 return;
             }
 
-            // define variables for width and depth
             Dimension widthDim = null;
             Dimension depthDim = null;
-
-            // define variables to track the largest dimension value for width and depth
             double maxWidthValue = double.MinValue;
             double maxDepthValue = double.MinValue;
 
-            // loop through dimensions to find the ones that are likely overall width and depth based on their orientation and offset
             foreach (Dimension curDim in listDims)
             {
-                // cast dimension curve to Line - if it fails, skip this dimension
                 Line dimLine = curDim.Curve as Line;
                 if (dimLine == null) continue;
 
-                // get the normalized direction of the dimension line
-                XYZ dimDir = (dimLine.Direction).Normalize();
-
-                // check if dimension runs parallel to view's right direction = width
-                bool isWidth = Math.Abs(dimDir.DotProduct(right)) > 0.99;
-
-                // check if dimension runs parallel to view's up direction = depth
-                bool isDepth = Math.Abs(dimDir.DotProduct(up)) > 0.99;
+                // classify by world-space axis so view rotation doesn't affect the result
+                XYZ dimDir = dimLine.Direction.Normalize();
+                bool isWidth = Math.Abs(dimDir.DotProduct(XYZ.BasisX)) > 0.99;
+                bool isDepth = Math.Abs(dimDir.DotProduct(XYZ.BasisY)) > 0.99;
 
                 double value = curDim.Value.Value;
 
@@ -358,14 +343,12 @@ namespace DataQuery
                 }
             }
 
-            // if valid dimensions are found, extract their values as strings
             if (widthDim != null)
                 width = widthDim.ValueString;
-            
+
             if (depthDim != null)
                 depth = depthDim.ValueString;
-
-        }          
+        }
 
         private int CountStories(Document curDoc)
         {
